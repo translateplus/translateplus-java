@@ -117,10 +117,31 @@ jobs:
       - name: Build project
         run: mvn clean package -DskipTests
 
-      - name: Publish to Maven Central
+      - name: Configure Maven Settings
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                    http://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${SONATYPE_USERNAME}</username>
+                <password>${SONATYPE_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+          echo "✅ Maven settings.xml configured"
+
+      - name: Publish to Maven Central
+        env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           KEY_ID=${{ steps.gpg_setup.outputs.key_id }}
@@ -149,9 +170,7 @@ jobs:
           echo "Publishing to Maven Central..."
           mvn clean deploy -P release \
             -Dgpg.keyname="$KEY_ID" \
-            -Dgpg.passphrase="$GPG_PASSPHRASE" \
-            -Dcentral.username="$SONATYPE_USERNAME" \
-            -Dcentral.password="$SONATYPE_PASSWORD"
+            -Dgpg.passphrase="$GPG_PASSPHRASE"
 
       - name: Verify publication
         run: |
