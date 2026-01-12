@@ -81,7 +81,7 @@ public class TranslatePlusClient {
             Map<String, Object> data,
             Map<String, File> files,
             Map<String, String> params
-    ) throws TranslatePlusException {
+    ) {
         try {
             semaphore.acquire();
         } catch (InterruptedException e) {
@@ -211,7 +211,7 @@ public class TranslatePlusClient {
      * @param target Target language code
      * @return Translation result
      */
-    public Map<String, Object> translate(String text, String source, String target) throws TranslatePlusException {
+    public Map<String, Object> translate(String text, String source, String target) {
         Map<String, Object> data = new HashMap<>();
         data.put("text", text);
         data.put("source", source != null ? source : "auto");
@@ -227,7 +227,7 @@ public class TranslatePlusClient {
      * @param target Target language code
      * @return Batch translation result
      */
-    public Map<String, Object> translateBatch(List<String> texts, String source, String target) throws TranslatePlusException {
+    public Map<String, Object> translateBatch(List<String> texts, String source, String target) {
         if (texts == null || texts.isEmpty()) {
             throw new TranslatePlusValidationError("Texts list cannot be empty");
         }
@@ -250,7 +250,7 @@ public class TranslatePlusClient {
      * @param target Target language code
      * @return Translated HTML content
      */
-    public Map<String, Object> translateHTML(String html, String source, String target) throws TranslatePlusException {
+    public Map<String, Object> translateHTML(String html, String source, String target) {
         Map<String, Object> data = new HashMap<>();
         data.put("html", html);
         data.put("source", source != null ? source : "auto");
@@ -267,7 +267,7 @@ public class TranslatePlusClient {
      * @param target    Target language code
      * @return Translated email
      */
-    public Map<String, Object> translateEmail(String subject, String emailBody, String source, String target) throws TranslatePlusException {
+    public Map<String, Object> translateEmail(String subject, String emailBody, String source, String target) {
         Map<String, Object> data = new HashMap<>();
         data.put("subject", subject);
         data.put("email_body", emailBody);
@@ -285,7 +285,7 @@ public class TranslatePlusClient {
      * @param target  Target language code
      * @return Translated subtitle content
      */
-    public Map<String, Object> translateSubtitles(String content, String format, String source, String target) throws TranslatePlusException {
+    public Map<String, Object> translateSubtitles(String content, String format, String source, String target) {
         if (!format.equals("srt") && !format.equals("vtt")) {
             throw new TranslatePlusValidationError("Format must be 'srt' or 'vtt'");
         }
@@ -304,7 +304,7 @@ public class TranslatePlusClient {
      * @param text Text to detect language from
      * @return Language detection result
      */
-    public Map<String, Object> detectLanguage(String text) throws TranslatePlusException {
+    public Map<String, Object> detectLanguage(String text) {
         Map<String, Object> data = new HashMap<>();
         data.put("text", text);
         return makeRequest("POST", "/v2/language_detect", data, null, null);
@@ -315,7 +315,7 @@ public class TranslatePlusClient {
      *
      * @return Supported languages
      */
-    public Map<String, Object> getSupportedLanguages() throws TranslatePlusException {
+    public Map<String, Object> getSupportedLanguages() {
         return makeRequest("GET", "/v2/supported_languages", null, null, null);
     }
 
@@ -324,7 +324,7 @@ public class TranslatePlusClient {
      *
      * @return Account summary
      */
-    public Map<String, Object> getAccountSummary() throws TranslatePlusException {
+    public Map<String, Object> getAccountSummary() {
         return makeRequest("GET", "/v2/account/summary", null, null, null);
     }
 
@@ -342,7 +342,7 @@ public class TranslatePlusClient {
             List<String> targetLanguages,
             String sourceLanguage,
             String webhookUrl
-    ) throws TranslatePlusException {
+    ) {
         if (filePath == null || !filePath.exists()) {
             throw new TranslatePlusValidationError("File not found: " + (filePath != null ? filePath.getPath() : "null"));
         }
@@ -369,7 +369,7 @@ public class TranslatePlusClient {
      * @param jobId Job ID
      * @return Job status
      */
-    public Map<String, Object> getI18nJobStatus(String jobId) throws TranslatePlusException {
+    public Map<String, Object> getI18nJobStatus(String jobId) {
         return makeRequest("GET", "/v2/i18n/job/" + jobId, null, null, null);
     }
 
@@ -380,7 +380,7 @@ public class TranslatePlusClient {
      * @param pageSize Page size (default: 10)
      * @return List of jobs
      */
-    public Map<String, Object> listI18nJobs(Integer page, Integer pageSize) throws TranslatePlusException {
+    public Map<String, Object> listI18nJobs(Integer page, Integer pageSize) {
         Map<String, String> params = new HashMap<>();
         params.put("page", String.valueOf(page != null ? page : 1));
         params.put("page_size", String.valueOf(pageSize != null ? pageSize : 10));
