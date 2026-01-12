@@ -30,6 +30,7 @@ jobs:
           cache: maven
 
       - name: Configure GPG
+        id: gpg_setup
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -37,9 +38,15 @@ jobs:
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          gpg --list-secret-keys --keyid-format LONG
           echo "pinentry-mode loopback" > ~/.gnupg/gpg.conf
           chmod 600 ~/.gnupg/gpg.conf
+          # Extract and output key ID
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E "^(sec|pub)" | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "key_id=$KEY_ID" >> $GITHUB_OUTPUT
+          echo "GPG Key ID: $KEY_ID"
+          gpg --list-secret-keys --keyid-format LONG
+          # Trust the imported key (ultimate trust)
+          echo "$KEY_ID:6:" | gpg --import-ownertrust || true
 
       - name: Extract version from tag
         id: get_version
@@ -73,7 +80,10 @@ jobs:
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          KEY_ID=${{ steps.gpg_setup.outputs.key_id }}
+          echo "Using GPG Key ID: $KEY_ID"
           mvn clean deploy -P release \
+            -Dgpg.keyname="$KEY_ID" \
             -Dgpg.passphrase="$GPG_PASSPHRASE" \
             -Dcentral.username="$SONATYPE_USERNAME" \
             -Dcentral.password="$SONATYPE_PASSWORD"
