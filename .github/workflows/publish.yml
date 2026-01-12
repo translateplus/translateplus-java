@@ -139,6 +139,13 @@ jobs:
           </settings>
           EOF
           echo "✅ Maven settings.xml configured"
+          
+          # Verify credentials are set
+          if [ -z "$SONATYPE_USERNAME" ] || [ -z "$SONATYPE_PASSWORD" ]; then
+            echo "ERROR: Sonatype credentials not set"
+            exit 1
+          fi
+          echo "✅ Sonatype credentials configured"
 
       - name: Publish to Maven Central
         env:
@@ -167,10 +174,46 @@ jobs:
             echo "WARNING: GPG signing test failed, but continuing..."
           }
           
-          echo "Publishing to Maven Central..."
-          mvn clean deploy -P release \
+          # Verify artifacts are built before deploying
+          echo "Verifying artifacts before deployment..."
+          mvn clean package -P release \
             -Dgpg.keyname="$KEY_ID" \
-            -Dgpg.passphrase="$GPG_PASSPHRASE"
+            -Dgpg.passphrase="$GPG_PASSPHRASE" \
+            -DskipTests
+          
+          echo "Checking generated artifacts..."
+          ls -lah target/*.jar target/*.asc target/*.pom 2>/dev/null || echo "No artifacts found in target/"
+          
+          # Check if version already exists
+          VERSION=${{ steps.get_version.outputs.version || steps.set_version.outputs.version }}
+          echo "Checking if version $VERSION already exists..."
+          if curl -s "https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/" | grep -q "$VERSION"; then
+            echo "⚠️  WARNING: Version $VERSION may already exist on Maven Central"
+            echo "Continuing anyway (will fail if version truly exists)..."
+          fi
+          
+          echo "Publishing to Maven Central..."
+          echo "This may take several minutes..."
+          mvn deploy -P release \
+            -Dgpg.keyname="$KEY_ID" \
+            -Dgpg.passphrase="$GPG_PASSPHRASE" \
+            -X 2>&1 | tee deploy.log || {
+            echo "=== Deployment failed ==="
+            echo "=== Last 100 lines of deploy.log ==="
+            tail -100 deploy.log
+            echo ""
+            echo "=== Searching for error messages ==="
+            grep -i "error\|fail\|exception" deploy.log | tail -50
+            echo ""
+            echo "=== Full error trace (last 200 lines) ==="
+            mvn deploy -P release \
+              -Dgpg.keyname="$KEY_ID" \
+              -Dgpg.passphrase="$GPG_PASSPHRASE" \
+              -e 2>&1 | tail -200
+            exit 1
+          }
+          
+          echo "✅ Deployment completed successfully!"
 
       - name: Verify publication
         run: |
