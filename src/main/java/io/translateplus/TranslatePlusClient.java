@@ -195,7 +195,8 @@ public class TranslatePlusClient {
 
             throw new TranslatePlusAPIError(
                     "Request failed after " + maxRetries + " retries: " +
-                            (lastError != null ? lastError.getMessage() : "Unknown error")
+                            (lastError != null ? lastError.getMessage() : "Unknown error"),
+                    null
             );
         } finally {
             semaphore.release();
