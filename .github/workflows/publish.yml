@@ -34,38 +34,62 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
           mkdir -p ~/.gnupg
           chmod 700 ~/.gnupg
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           echo "pinentry-mode loopback" > ~/.gnupg/gpg.conf
           chmod 600 ~/.gnupg/gpg.conf
+          
+          # Import the private key
+          echo "Importing GPG private key..."
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          
           # List keys for debugging
-          echo "=== GPG Keys ==="
+          echo "=== GPG Keys After Import ==="
           gpg --list-secret-keys --keyid-format LONG
-          # Try to extract key ID, or use secret if provided
-          if [ -n "$GPG_KEY_ID" ]; then
-            KEY_ID="$GPG_KEY_ID"
-            echo "Using GPG_KEY_ID from secrets: $KEY_ID"
-          else
-            # Extract key ID from keyring
-            KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E "^sec" | head -1 | awk -F'/' '{print $2}' | awk '{print $1}')
-            if [ -z "$KEY_ID" ]; then
-              # Fallback: try with pub
-              KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E "^pub" | head -1 | awk -F'/' '{print $2}' | awk '{print $1}')
-            fi
-          fi
+          
+          # Extract key ID from the imported key (always extract, don't use secret)
+          # Try multiple methods to extract the key ID
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E "^sec" | head -1 | sed -n 's/.*\/\([A-F0-9]\{16\}\).*/\1/p')
+          
           if [ -z "$KEY_ID" ]; then
-            echo "ERROR: Could not extract GPG key ID"
-            echo "Please set GPG_KEY_ID secret or ensure key is properly imported"
+            # Fallback: try with different format
+            KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E "^sec" | head -1 | awk -F'/' '{print $2}' | awk '{print $1}')
+          fi
+          
+          if [ -z "$KEY_ID" ]; then
+            # Last resort: try with pub
+            KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -E "^pub" | head -1 | sed -n 's/.*\/\([A-F0-9]\{16\}\).*/\1/p')
+          fi
+          
+          if [ -z "$KEY_ID" ]; then
+            echo "ERROR: Could not extract GPG key ID from imported key"
+            echo "=== Full key listing ==="
+            gpg --list-secret-keys --keyid-format LONG
+            echo "=== Full key listing (SHORT format) ==="
+            gpg --list-secret-keys --keyid-format SHORT
+            exit 1
+          fi
+          
+          echo "Extracted GPG Key ID: $KEY_ID"
+          
+          # Verify the key exists
+          if ! gpg --list-secret-keys --keyid-format LONG | grep -q "$KEY_ID"; then
+            echo "ERROR: Extracted key ID $KEY_ID not found in keyring"
+            echo "=== Full key listing ==="
             gpg --list-secret-keys --keyid-format LONG
             exit 1
           fi
-          echo "key_id=$KEY_ID" >> $GITHUB_OUTPUT
-          echo "GPG Key ID: $KEY_ID"
+          
           # Trust the imported key (ultimate trust)
+          echo "Trusting key $KEY_ID..."
           echo "$KEY_ID:6:" | gpg --import-ownertrust || true
+          
+          # Verify trust
+          gpg --check-trustdb || true
+          
+          echo "key_id=$KEY_ID" >> $GITHUB_OUTPUT
+          echo "✅ GPG Key ID configured: $KEY_ID"
 
       - name: Extract version from tag
         id: get_version
@@ -105,13 +129,24 @@ jobs:
             gpg --list-secret-keys --keyid-format LONG
             exit 1
           fi
+          
           echo "Using GPG Key ID: $KEY_ID"
-          # Verify key exists
-          if ! gpg --list-secret-keys --keyid-format LONG | grep -q "$KEY_ID"; then
+          
+          # Final verification: key must exist
+          if ! gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -q "$KEY_ID"; then
             echo "ERROR: Key $KEY_ID not found in keyring"
+            echo "=== Available keys ==="
             gpg --list-secret-keys --keyid-format LONG
             exit 1
           fi
+          
+          # Test signing with the key
+          echo "Testing GPG signing..."
+          echo "test" | gpg --batch --yes --pinentry-mode loopback --sign --local-user "$KEY_ID" --output /dev/null 2>&1 || {
+            echo "WARNING: GPG signing test failed, but continuing..."
+          }
+          
+          echo "Publishing to Maven Central..."
           mvn clean deploy -P release \
             -Dgpg.keyname="$KEY_ID" \
             -Dgpg.passphrase="$GPG_PASSPHRASE" \
