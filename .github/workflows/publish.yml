@@ -15,6 +15,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      dependency-submission: write
 
     steps:
       - name: Checkout code
@@ -28,6 +29,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           cache: maven
+          dependency-submission: 'enabled'
 
       - name: Configure GPG
         id: gpg_setup
