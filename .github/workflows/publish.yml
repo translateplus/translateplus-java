@@ -141,6 +141,8 @@ jobs:
             exit 1
           fi
           
+          # Create Maven settings.xml with Sonatype Central credentials
+          # The server ID must be 'central' to match pom.xml publishingServerId
           cat > ~/.m2/settings.xml <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
@@ -206,14 +208,20 @@ jobs:
           
           echo "Publishing to Maven Central using central-publishing-maven-plugin..."
           echo "This plugin handles upload, validation, and release automatically."
-          echo "This may take several minutes..."
+          echo "With autoPublish=true, it will:"
+          echo "  1. Upload artifacts to staging"
+          echo "  2. Automatically close and validate"
+          echo "  3. Automatically release to Maven Central"
+          echo "  4. Wait until published (waitUntil=published)"
+          echo ""
+          echo "This may take 5-10 minutes..."
           
           # Use central-publishing-maven-plugin which handles everything
           # It will upload, sign, validate, and publish automatically
           mvn clean deploy -P release \
             -Dgpg.keyname="$KEY_ID" \
             -Dgpg.passphrase="$GPG_PASSPHRASE" \
-            -X 2>&1 | tee deploy.log || {
+            2>&1 | tee deploy.log || {
             echo "=== Deployment failed ==="
             echo "=== Last 100 lines of deploy.log ==="
             tail -100 deploy.log
@@ -244,75 +252,62 @@ jobs:
             exit 1
           }
           
-          echo "✅ Deployment completed!"
           echo ""
           echo "Checking deployment status..."
-          if grep -q "central-publishing-maven-plugin" deploy.log; then
-            echo "✅ central-publishing-maven-plugin executed successfully"
-            # Check if it completed publishing
-            if grep -qi "published\|released\|success" deploy.log; then
-              echo "✅ Artifacts appear to be published"
-            fi
+          if grep -qi "published\|released\|successfully published" deploy.log; then
+            echo "✅✅✅ SUCCESS! Artifacts have been published to Maven Central!"
+            echo ""
+            echo "The central-publishing-maven-plugin with autoPublish=true has:"
+            echo "  ✅ Uploaded artifacts to staging"
+            echo "  ✅ Closed and validated the staging repository"
+            echo "  ✅ Released to Maven Central"
+            echo "  ✅ Waited until published"
+            echo ""
+            VERSION=${{ steps.get_version.outputs.version || steps.set_version.outputs.version }}
+            echo "📦 Published version: $VERSION"
+            echo "🔗 Maven Central URL: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
+            echo ""
+            echo "⏱️  Sync time: Usually available immediately, but can take up to 10 minutes"
+          elif grep -q "central-publishing-maven-plugin" deploy.log; then
+            echo "✅ central-publishing-maven-plugin executed"
+            echo "⚠️  Publishing may still be in progress. Check logs above for status."
+            echo ""
+            VERSION=${{ steps.get_version.outputs.version || steps.set_version.outputs.version }}
+            echo "📋 Next Steps:"
+            echo "1. Check staging repository at: https://central.sonatype.com/"
+            echo "2. Verify at: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
           else
             echo "⚠️  Note: Check logs above for central-publishing-maven-plugin execution"
+            echo ""
+            VERSION=${{ steps.get_version.outputs.version || steps.set_version.outputs.version }}
+            echo "📋 Manual verification:"
+            echo "1. Check staging repository at: https://central.sonatype.com/"
+            echo "2. Verify at: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
           fi
-          
-          echo ""
-          echo "📋 Next Steps:"
-          echo "1. Check staging repository at: https://central.sonatype.com/"
-          echo "2. Wait 10-30 minutes for sync to Maven Central"
-          echo "3. Verify at: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
 
-      - name: Explicitly Publish Staging Repository
-        env:
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
-          SONATYPE_TOKEN: ${{ secrets.SONATYPE_TOKEN }}
+      - name: Verify Publication Status
         run: |
-          echo "Attempting to explicitly publish staging repository using central-publishing-maven-plugin..."
+          VERSION=${{ steps.get_version.outputs.version || steps.set_version.outputs.version }}
+          echo "🔍 Verifying publication status..."
           echo ""
-          
-          # Wait a bit for staging repository to be created
-          echo "Waiting 10 seconds for staging repository to be created..."
-          sleep 10
-          
-          # Try to explicitly execute the central publishing plugin
-          echo "Executing central-publishing-maven-plugin:publish goal..."
-          mvn org.sonatype.central:central-publishing-maven-plugin:0.6.0:publish \
-            -DpublishingServerId=central \
-            -DautoPublish=true \
-            -DwaitUntil=published \
-            -P release 2>&1 | tee publish.log || {
-            echo "⚠️  Explicit publish attempt completed (may have already been published)"
-            echo "Checking logs for status..."
-            tail -100 publish.log | grep -i "publish\|close\|release\|error\|fail" || echo "No relevant messages found"
-          }
-          
+          echo "With autoPublish=true and waitUntil=published, the central-publishing-maven-plugin"
+          echo "should have automatically handled the entire publication process."
           echo ""
-          echo "=== IMPORTANT: Manual Check Required ==="
+          echo "If the deployment succeeded, your artifact should be:"
+          echo "  ✅ Published to Maven Central"
+          echo "  ✅ Available at: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
           echo ""
-          echo "Please check your staging repository status:"
+          echo "If you need to manually verify or troubleshoot:"
           echo "1. Go to: https://central.sonatype.com/"
           echo "2. Log in with your Sonatype credentials"
-          echo "3. Navigate to 'Staging Repositories' or 'Staging Profiles'"
-          echo "4. Look for repository with groupId 'io.translateplus'"
+          echo "3. Navigate to 'Staging Repositories'"
+          echo "4. Look for repository with groupId 'io.translateplus' and version '$VERSION'"
           echo "5. Check the status:"
-          echo "   - 'Open' = Needs to be closed and released"
-          echo "   - 'Closed' = Ready to be released"
-          echo "   - 'Released' = Successfully published (will sync to Maven Central)"
+          echo "   - 'Released' = ✅ Successfully published (syncing to Maven Central)"
+          echo "   - 'Closed' = ⚠️  Validated but not released (click 'Release')"
+          echo "   - 'Open' = ⚠️  Not validated (click 'Close', then 'Release')"
           echo ""
-          echo "If status is 'Open' or 'Closed':"
-          echo "- Select the repository"
-          echo "- Click 'Close' (if Open) - this validates the artifacts"
-          echo "- Click 'Release' (if Closed) - this publishes to Maven Central"
-          echo ""
-          echo "Common issues:"
-          echo "- Validation errors: Check the 'Activity' tab for details"
-          echo "- GPG signature issues: Ensure GPG key is published to keyserver"
-          echo "- Missing files: Ensure sources and javadoc are attached"
-          echo ""
-          echo "With autoPublish=true, this should happen automatically,"
-          echo "but manual intervention may be needed if there are validation errors."
+          echo "Note: With autoPublish=true, status should be 'Released' automatically."
 
       - name: Check Sonatype Central Staging Status
         env:

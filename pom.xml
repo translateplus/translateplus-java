@@ -119,16 +119,8 @@
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
                             <waitUntil>published</waitUntil>
+                            <centralBaseUrl>https://central.sonatype.com</centralBaseUrl>
                         </configuration>
-                        <executions>
-                            <execution>
-                                <id>publish</id>
-                                <phase>deploy</phase>
-                                <goals>
-                                    <goal>publish</goal>
-                                </goals>
-                            </execution>
-                        </executions>
                     </plugin>
                 </plugins>
             </build>
