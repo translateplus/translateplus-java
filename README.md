@@ -1,10 +1,14 @@
 # TranslatePlus Java Client
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.translateplus/translateplus-java)](https://search.maven.org/artifact/io.translateplus/translateplus-java)
+[![Maven Central](https://img.shields.io/maven-central/v/io.translateplus/translateplus-java)](https://central.sonatype.com/artifact/io.translateplus/translateplus-java)
 [![Java](https://img.shields.io/badge/Java-11+-blue.svg)](https://www.oracle.com/java/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Official Java client library for [Translation API](https://translateplus.io) - Professional translation service for text, HTML, emails, subtitles, and i18n files in 100+ languages.
+Official Java client library for [TranslatePlus API](https://translateplus.io) - Professional translation service for text, HTML, emails, subtitles, and i18n files in 100+ languages.
+
+**Version:** 2.1.3+ (Production/Stable)  
+**Maven Central:** [io.translateplus:translateplus-java](https://central.sonatype.com/artifact/io.translateplus/translateplus-java)  
+**GitHub:** [translateplus/translateplus-java](https://github.com/translateplus/translateplus-java)
 
 ## Features
 
@@ -25,7 +29,7 @@ Add the following dependency to your `pom.xml`:
 <dependency>
     <groupId>io.translateplus</groupId>
     <artifactId>translateplus-java</artifactId>
-    <version>1.0.0</version>
+    <version>2.1.3</version>
 </dependency>
 ```
 
@@ -35,7 +39,7 @@ Add the following to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.translateplus:translateplus-java:1.0.0'
+    implementation 'io.translateplus:translateplus-java:2.1.3'
 }
 ```
 
@@ -270,8 +274,9 @@ TranslatePlus provides official client libraries for multiple programming langua
 - **Python**: [translateplus-python](https://pypi.org/project/translateplus-python/) - Official PyPI package
 - **JavaScript/TypeScript**: [translateplus-js](https://www.npmjs.com/package/translateplus-js) - Official npm package
 - **PHP**: [translateplus-php](https://packagist.org/packages/translateplus/translateplus-php) - Official Composer package
+- **Java**: [translateplus-java](https://central.sonatype.com/artifact/io.translateplus/translateplus-java) - Official Maven Central package (this library)
 
-All libraries provide the same comprehensive API support and features.
+All libraries provide the same comprehensive API support and features. For complete documentation, visit [https://docs.translateplus.io/official-sdks](https://docs.translateplus.io/official-sdks).
 
 ## Support
 
