@@ -123,6 +123,24 @@ jobs:
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
         run: |
           mkdir -p ~/.m2
+          
+          # Sonatype Central tokens come as username/password pairs
+          # The username is the token identifier and password is the token secret
+          if [ -z "$SONATYPE_USERNAME" ] || [ -z "$SONATYPE_PASSWORD" ]; then
+            echo "ERROR: Sonatype credentials not set"
+            echo ""
+            echo "Sonatype Central requires token-based authentication."
+            echo "To generate a token:"
+            echo "1. Go to https://central.sonatype.com/"
+            echo "2. Log in and go to your profile/settings"
+            echo "3. Generate a new User Token"
+            echo "4. You'll receive a username and password pair"
+            echo "5. Add them as GitHub secrets:"
+            echo "   - SONATYPE_USERNAME: (token username)"
+            echo "   - SONATYPE_PASSWORD: (token password/secret)"
+            exit 1
+          fi
+          
           cat > ~/.m2/settings.xml <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
@@ -138,13 +156,7 @@ jobs:
             </servers>
           </settings>
           EOF
-          echo "✅ Maven settings.xml configured"
-          
-          # Verify credentials are set
-          if [ -z "$SONATYPE_USERNAME" ] || [ -z "$SONATYPE_PASSWORD" ]; then
-            echo "ERROR: Sonatype credentials not set"
-            exit 1
-          fi
+          echo "✅ Maven settings.xml configured with token authentication"
           echo "✅ Sonatype credentials configured"
 
       - name: Publish to Maven Central
@@ -192,9 +204,13 @@ jobs:
             echo "Continuing anyway (will fail if version truly exists)..."
           fi
           
-          echo "Publishing to Maven Central..."
+          echo "Publishing to Maven Central using central-publishing-maven-plugin..."
+          echo "This plugin handles upload, validation, and release automatically."
           echo "This may take several minutes..."
-          mvn deploy -P release \
+          
+          # Use central-publishing-maven-plugin which handles everything
+          # It will upload, sign, validate, and publish automatically
+          mvn clean deploy -P release \
             -Dgpg.keyname="$KEY_ID" \
             -Dgpg.passphrase="$GPG_PASSPHRASE" \
             -X 2>&1 | tee deploy.log || {
@@ -203,25 +219,42 @@ jobs:
             tail -100 deploy.log
             echo ""
             echo "=== Searching for error messages ==="
-            grep -i "error\|fail\|exception" deploy.log | tail -50
+            grep -i "error\|fail\|exception\|401\|unauthorized" deploy.log | tail -50
+            echo ""
+            echo "=== Authentication check ==="
+            if grep -qi "401\|unauthorized\|token" deploy.log; then
+              echo ""
+              echo "⚠️  AUTHENTICATION ERROR DETECTED"
+              echo ""
+              echo "Sonatype Central requires token-based authentication."
+              echo "To fix this:"
+              echo "1. Go to https://central.sonatype.com/"
+              echo "2. Log in and navigate to your profile/settings"
+              echo "3. Generate a new User Token"
+              echo "4. Add it as SONATYPE_TOKEN secret in GitHub repository settings"
+              echo "5. The workflow will automatically use the token if available"
+              echo ""
+            fi
             echo ""
             echo "=== Full error trace (last 200 lines) ==="
-            mvn deploy -P release \
+            mvn clean deploy -P release \
               -Dgpg.keyname="$KEY_ID" \
               -Dgpg.passphrase="$GPG_PASSPHRASE" \
               -e 2>&1 | tail -200
             exit 1
           }
           
-          echo "✅ Deployment to staging repository completed!"
+          echo "✅ Deployment completed!"
           echo ""
-          echo "Checking if central-publishing-maven-plugin executed..."
+          echo "Checking deployment status..."
           if grep -q "central-publishing-maven-plugin" deploy.log; then
-            echo "✅ Plugin was executed"
-            grep -A 5 -B 5 "central-publishing-maven-plugin" deploy.log | tail -20
+            echo "✅ central-publishing-maven-plugin executed successfully"
+            # Check if it completed publishing
+            if grep -qi "published\|released\|success" deploy.log; then
+              echo "✅ Artifacts appear to be published"
+            fi
           else
-            echo "⚠️  WARNING: central-publishing-maven-plugin may not have executed"
-            echo "Attempting to explicitly publish staging repository..."
+            echo "⚠️  Note: Check logs above for central-publishing-maven-plugin execution"
           fi
           
           echo ""
@@ -234,6 +267,7 @@ jobs:
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SONATYPE_TOKEN: ${{ secrets.SONATYPE_TOKEN }}
         run: |
           echo "Attempting to explicitly publish staging repository using central-publishing-maven-plugin..."
           echo ""

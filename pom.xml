@@ -119,7 +119,6 @@
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
                             <waitUntil>published</waitUntil>
-                            <transitionCheckTimeout>600</transitionCheckTimeout>
                         </configuration>
                         <executions>
                             <execution>
