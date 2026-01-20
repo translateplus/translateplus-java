@@ -213,32 +213,72 @@ jobs:
             exit 1
           }
           
-          echo "✅ Deployment completed successfully!"
+          echo "✅ Deployment to staging repository completed!"
+          echo ""
+          echo "Checking if central-publishing-maven-plugin executed..."
+          if grep -q "central-publishing-maven-plugin" deploy.log; then
+            echo "✅ Plugin was executed"
+            grep -A 5 -B 5 "central-publishing-maven-plugin" deploy.log | tail -20
+          else
+            echo "⚠️  WARNING: central-publishing-maven-plugin may not have executed"
+            echo "Attempting to explicitly publish staging repository..."
+          fi
+          
           echo ""
           echo "📋 Next Steps:"
           echo "1. Check staging repository at: https://central.sonatype.com/"
           echo "2. Wait 10-30 minutes for sync to Maven Central"
           echo "3. Verify at: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
 
-      - name: Check Staging Repository Status
+      - name: Explicitly Publish Staging Repository
         env:
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
         run: |
-          echo "Checking staging repository status..."
-          echo "Note: This requires Sonatype Central API access"
+          echo "Attempting to explicitly publish staging repository using central-publishing-maven-plugin..."
           echo ""
-          echo "To check manually:"
+          
+          # Wait a bit for staging repository to be created
+          echo "Waiting 10 seconds for staging repository to be created..."
+          sleep 10
+          
+          # Try to explicitly execute the central publishing plugin
+          echo "Executing central-publishing-maven-plugin:publish goal..."
+          mvn org.sonatype.central:central-publishing-maven-plugin:0.6.0:publish \
+            -DpublishingServerId=central \
+            -DautoPublish=true \
+            -DwaitUntil=closed \
+            -P release 2>&1 | tee publish.log || {
+            echo "⚠️  Explicit publish attempt completed (may have already been published)"
+            echo "Checking logs for status..."
+            tail -100 publish.log | grep -i "publish\|close\|release\|error\|fail" || echo "No relevant messages found"
+          }
+          
+          echo ""
+          echo "=== IMPORTANT: Manual Check Required ==="
+          echo ""
+          echo "Please check your staging repository status:"
           echo "1. Go to: https://central.sonatype.com/"
           echo "2. Log in with your Sonatype credentials"
-          echo "3. Check 'Staging Repositories' for your artifact"
-          echo "4. Status should be 'Closed' or 'Released'"
+          echo "3. Navigate to 'Staging Repositories' or 'Staging Profiles'"
+          echo "4. Look for repository with groupId 'io.translateplus'"
+          echo "5. Check the status:"
+          echo "   - 'Open' = Needs to be closed and released"
+          echo "   - 'Closed' = Ready to be released"
+          echo "   - 'Released' = Successfully published (will sync to Maven Central)"
           echo ""
-          echo "If status is 'Open', you may need to:"
-          echo "- Close the repository"
-          echo "- Release the repository"
+          echo "If status is 'Open' or 'Closed':"
+          echo "- Select the repository"
+          echo "- Click 'Close' (if Open) - this validates the artifacts"
+          echo "- Click 'Release' (if Closed) - this publishes to Maven Central"
           echo ""
-          echo "With autoPublish=true, this should happen automatically"
+          echo "Common issues:"
+          echo "- Validation errors: Check the 'Activity' tab for details"
+          echo "- GPG signature issues: Ensure GPG key is published to keyserver"
+          echo "- Missing files: Ensure sources and javadoc are attached"
+          echo ""
+          echo "With autoPublish=true, this should happen automatically,"
+          echo "but manual intervention may be needed if there are validation errors."
 
       - name: Wait and Verify Maven Central Sync
         run: |
