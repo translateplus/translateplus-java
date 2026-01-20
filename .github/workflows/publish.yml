@@ -247,7 +247,7 @@ jobs:
           mvn org.sonatype.central:central-publishing-maven-plugin:0.6.0:publish \
             -DpublishingServerId=central \
             -DautoPublish=true \
-            -DwaitUntil=closed \
+            -DwaitUntil=published \
             -P release 2>&1 | tee publish.log || {
             echo "⚠️  Explicit publish attempt completed (may have already been published)"
             echo "Checking logs for status..."
@@ -280,39 +280,119 @@ jobs:
           echo "With autoPublish=true, this should happen automatically,"
           echo "but manual intervention may be needed if there are validation errors."
 
+      - name: Check Sonatype Central Staging Status
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          VERSION=${{ steps.get_version.outputs.version || steps.set_version.outputs.version }}
+          echo "🔍 Checking Sonatype Central staging repository status..."
+          echo ""
+          echo "⚠️  IMPORTANT: Manual verification required"
+          echo ""
+          echo "Please check your staging repository status at:"
+          echo "👉 https://central.sonatype.com/"
+          echo ""
+          echo "Steps to verify:"
+          echo "1. Log in with your Sonatype credentials"
+          echo "2. Go to 'Staging Repositories' or 'Staging Profiles'"
+          echo "3. Search for 'io.translateplus' or 'translateplus-java'"
+          echo "4. Check the status of the repository:"
+          echo ""
+          echo "   Status: 'Open'"
+          echo "   → Action: Click 'Close' button (validates artifacts)"
+          echo "   → Wait for validation to complete"
+          echo ""
+          echo "   Status: 'Closed'"
+          echo "   → Action: Click 'Release' button (publishes to Maven Central)"
+          echo "   → This will make it available on Maven Central"
+          echo ""
+          echo "   Status: 'Released'"
+          echo "   → ✅ Success! Artifact is being synced to Maven Central"
+          echo "   → Wait 10-30 minutes for sync to complete"
+          echo ""
+          echo "   Status: 'Failed' or shows errors"
+          echo "   → Check the 'Activity' tab for validation errors"
+          echo "   → Common issues:"
+          echo "     - GPG signature not found on keyserver"
+          echo "     - Missing sources/javadoc"
+          echo "     - POM validation errors"
+          echo ""
+          echo "If the repository is still 'Open' or 'Closed', the autoPublish"
+          echo "may not have worked. You'll need to manually close and release it."
+
       - name: Wait and Verify Maven Central Sync
         run: |
           VERSION=${{ steps.get_version.outputs.version || steps.set_version.outputs.version }}
-          echo "Waiting 30 seconds before checking Maven Central..."
-          sleep 30
+          echo "⏳ Waiting 2 minutes before checking Maven Central..."
+          echo "(This gives time for Sonatype Central to process the release)"
+          sleep 120
           
-          echo "Checking if artifact is available on Maven Central..."
-          MAX_ATTEMPTS=12
+          echo ""
+          echo "🔍 Checking if artifact is available on Maven Central..."
+          echo "URL: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
+          echo ""
+          
+          MAX_ATTEMPTS=15
           ATTEMPT=0
           
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             ATTEMPT=$((ATTEMPT + 1))
             echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Checking Maven Central..."
             
-            if curl -s -f "https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/" > /dev/null 2>&1; then
-              echo "✅ Artifact is now available on Maven Central!"
-              echo "URL: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
+            # Check if the version directory exists
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo ""
+              echo "✅✅✅ SUCCESS! Artifact is now available on Maven Central! ✅✅✅"
+              echo ""
+              echo "📦 Published version: $VERSION"
+              echo "🔗 URL: https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
+              echo ""
+              echo "📝 Maven dependency:"
+              echo "<dependency>"
+              echo "    <groupId>io.translateplus</groupId>"
+              echo "    <artifactId>translateplus-java</artifactId>"
+              echo "    <version>$VERSION</version>"
+              echo "</dependency>"
+              echo ""
+              echo "🎉 Publication complete!"
               exit 0
-            else
+            elif [ "$HTTP_CODE" = "404" ]; then
               if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-                echo "⏳ Not yet available. Waiting 2 minutes before next check..."
-                sleep 120
+                echo "⏳ Not yet available (404). Waiting 3 minutes before next check..."
+                echo "   (Sync typically takes 10-30 minutes after release)"
+                sleep 180
+              fi
+            else
+              echo "⚠️  Unexpected HTTP code: $HTTP_CODE"
+              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                echo "   Waiting 3 minutes before retry..."
+                sleep 180
               fi
             fi
           done
           
-          echo "⚠️  Artifact not yet available on Maven Central after $((MAX_ATTEMPTS * 2)) minutes"
-          echo "This is normal - sync can take 10-30 minutes"
-          echo "Please check manually at:"
-          echo "https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
           echo ""
-          echo "Also check Sonatype Central for any validation errors:"
-          echo "https://central.sonatype.com/"
+          echo "⚠️  Artifact not yet available on Maven Central after $((MAX_ATTEMPTS * 3)) minutes"
+          echo ""
+          echo "This could mean:"
+          echo "1. The artifact hasn't been released from Sonatype Central yet"
+          echo "2. The sync is taking longer than usual (can take up to 2 hours)"
+          echo ""
+          echo "🔍 Please verify:"
+          echo "1. Check Sonatype Central: https://central.sonatype.com/"
+          echo "   → Ensure repository status is 'Released' (not 'Open' or 'Closed')"
+          echo ""
+          echo "2. Check Maven Central directly:"
+          echo "   → https://repo1.maven.org/maven2/io/translateplus/translateplus-java/$VERSION/"
+          echo ""
+          echo "3. If repository is still 'Open' or 'Closed' in Sonatype Central:"
+          echo "   → Manually close and release it"
+          echo "   → Then wait 10-30 minutes for sync"
+          echo ""
+          echo "4. Check for validation errors in Sonatype Central Activity tab"
 
       - name: Verify publication
         run: |
